@@ -1,0 +1,36 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  background-color: #e9edf5;
+  color: #242b3d;
+}
+
+/* Soft UI: every raised surface is molded from the same base color as its
+   background -- there is no separate "card" material, just the ground
+   pushed up or pressed in. Depth comes only from the paired light/dark
+   shadow, never from a border or a color change. */
+.transition-soft {
+  transition: box-shadow 180ms ease, transform 180ms ease, color 180ms ease,
+    background-color 180ms ease;
+}
+
+.grain {
+  background-image: radial-gradient(#00000006 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+input,
+textarea,
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: #cfd3fb;
+  color: #242b3d;
+}
