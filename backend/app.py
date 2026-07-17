@@ -84,12 +84,12 @@ def skill_gap():
         prompt = build_skill_gap_prompt(resume_text, jd_text)
         result = call_gemini_json(prompt)
 
-        # Deterministic match percentage, computed here rather than trusting
-        # the model's arithmetic -- see design note in utils/prompts.py.
-        jd_skills = result.get("jdSkills", []) or []
-        matched_skills = result.get("matchedSkills", []) or []
-        total = len(jd_skills) or 1
-        result["matchPercentage"] = round(len(matched_skills) / total * 100)
+        # Deterministic match percentage — only counts Required JD skills,
+        # so a matched Preferred skill doesn't inflate the headline number.
+        required_jd = [s for s in jd_skills if s.get("requirement") == "Required"]
+        required_matched = [s for s in matched_skills if s.get("requirement") == "Required"]
+        total = len(required_jd) or 1
+        result["matchPercentage"] = round(len(required_matched) / total * 100)
 
         return jsonify(result)
     except UnsupportedFileType as e:
