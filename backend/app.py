@@ -23,18 +23,24 @@ from utils.gemini_client import GeminiError, call_gemini_json
 from utils.prompts import build_combined_analysis_prompt, build_fit_verdict_prompt, build_skill_gap_prompt
 
 
+def _compute_match_percentage(jd_skills, matched_skills):
+    """Deterministic match percentage — only counts Required JD skills,
+    so a matched Preferred skill doesn't inflate the headline number."""
+    required_jd = [s for s in jd_skills if s.get("requirement") == "Required"]
+    required_matched = [s for s in matched_skills if s.get("requirement") == "Required"]
+    total = len(required_jd) or 1
+    return round(len(required_matched) / total * 100)
+
+
 def _build_combined_analysis_payload(resume_text: str, jd_text: str) -> dict:
     """Run one Gemini call and return both analysis payloads."""
     result = call_gemini_json(build_combined_analysis_prompt(resume_text, jd_text))
     skill_gap_result = result.get("skillGap") or {}
     fit_verdict_result = result.get("fitVerdict") or {}
 
-    # Deterministic match percentage, computed here rather than trusting
-    # the model's arithmetic -- see design note in utils/prompts.py.
     jd_skills = skill_gap_result.get("jdSkills", []) or []
     matched_skills = skill_gap_result.get("matchedSkills", []) or []
-    total = len(jd_skills) or 1
-    skill_gap_result["matchPercentage"] = round(len(matched_skills) / total * 100)
+    skill_gap_result["matchPercentage"] = _compute_match_percentage(jd_skills, matched_skills)
 
     return {"skillGap": skill_gap_result, "fitVerdict": fit_verdict_result}
 
@@ -84,12 +90,9 @@ def skill_gap():
         prompt = build_skill_gap_prompt(resume_text, jd_text)
         result = call_gemini_json(prompt)
 
-        # Deterministic match percentage — only counts Required JD skills,
-        # so a matched Preferred skill doesn't inflate the headline number.
-        required_jd = [s for s in jd_skills if s.get("requirement") == "Required"]
-        required_matched = [s for s in matched_skills if s.get("requirement") == "Required"]
-        total = len(required_jd) or 1
-        result["matchPercentage"] = round(len(required_matched) / total * 100)
+        jd_skills = result.get("jdSkills", []) or []
+        matched_skills = result.get("matchedSkills", []) or []
+        result["matchPercentage"] = _compute_match_percentage(jd_skills, matched_skills)
 
         return jsonify(result)
     except UnsupportedFileType as e:
