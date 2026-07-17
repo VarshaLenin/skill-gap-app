@@ -1,6 +1,7 @@
 function SkillTag({ label, variant }) {
   const styles = {
     matched: "bg-primary text-white shadow-raised-xs",
+    "matched-preferred": "bg-primary/60 text-white shadow-raised-xs",
     missing: "bg-surface text-warm shadow-pressed-sm",
   };
   return (
@@ -10,7 +11,7 @@ function SkillTag({ label, variant }) {
   );
 }
 
-function MissingGroup({ title, skills }) {
+function SkillGroup({ title, skills, variant = "missing" }) {
   if (!skills.length) return null;
   return (
     <div className="mb-4">
@@ -19,7 +20,7 @@ function MissingGroup({ title, skills }) {
       </p>
       <div>
         {skills.map((s) => (
-          <SkillTag key={s.skill} label={s.skill} variant="missing" />
+          <SkillTag key={s.skill} label={s.skill} variant={variant} />
         ))}
       </div>
     </div>
@@ -73,15 +74,18 @@ export default function SkillGapResult({ result }) {
     matchPercentage = 0,
   } = result;
 
+  const matchedRequired = matchedSkills.filter((s) => s.requirement === "Required");
+  const matchedPreferred = matchedSkills.filter((s) => s.requirement === "Preferred");
   const missingRequired = missingSkills.filter((s) => s.requirement === "Required");
   const missingPreferred = missingSkills.filter((s) => s.requirement === "Preferred");
+  const requiredJdCount = jdSkills.filter((s) => s.requirement === "Required").length;
 
   return (
     <div className="mt-6 rounded-card bg-surface p-6 shadow-raised">
       <div className="mb-8 flex flex-col items-center">
         <MatchDial percentage={matchPercentage} />
         <p className="mt-4 text-xs text-muted">
-          {matchedSkills.length} of {jdSkills.length} JD skills matched
+          {matchedRequired.length} of {requiredJdCount} required skills matched
         </p>
       </div>
 
@@ -90,11 +94,10 @@ export default function SkillGapResult({ result }) {
           Matched Skills
         </p>
         {matchedSkills.length ? (
-          <div>
-            {matchedSkills.map((s) => (
-              <SkillTag key={s.skill} label={s.skill} variant="matched" />
-            ))}
-          </div>
+          <>
+            <SkillGroup title="Required" skills={matchedRequired} variant="matched" />
+            <SkillGroup title="Preferred" skills={matchedPreferred} variant="matched-preferred" />
+          </>
         ) : (
           <p className="text-xs text-muted">No matched skills found.</p>
         )}
@@ -106,8 +109,8 @@ export default function SkillGapResult({ result }) {
         </p>
         {missingSkills.length ? (
           <>
-            <MissingGroup title="Required" skills={missingRequired} />
-            <MissingGroup title="Preferred" skills={missingPreferred} />
+            <SkillGroup title="Required" skills={missingRequired} variant="missing" />
+            <SkillGroup title="Preferred" skills={missingPreferred} variant="missing" />
           </>
         ) : (
           <p className="text-xs text-muted">No gaps — full match!</p>
