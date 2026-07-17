@@ -6,6 +6,8 @@ A full-stack app I built for the Techotlist Connects take-home — covers both a
 
 > Heads up: it's on Render's free tier, so if it's been idle a bit the first request can take 30-50s to wake up. Just give it a moment on first load.
 
+**Demo video:** [Output.mp4](https://github.com/VarshaLenin/skill-gap-app/blob/main/Output.mp4) — in case the live link is cold-starting or the free-tier Gemini key is rate-limited when you check it out. Click on "View Raw" to view the video.
+
 ## What it does
 
 **Assignment 1 — Skill Gap Checker**
