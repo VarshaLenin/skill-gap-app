@@ -1,162 +1,100 @@
 # Resume ↔ JD Analyzer
 
-A full-stack app with two tabs, built for two assignments:
+A full-stack app I built for the Techotlist Connects take-home — covers both assignments in one UI (tabbed), backed by one Flask service.
 
-1. **Skill Gap Checker** — matched skills, missing skills (flagged critical vs.
-   nice-to-have), and a deterministic match percentage.
-2. **Fit Verdict** — Qualified / Almost There / Not Yet, with 3 supporting
-   reasons.
+**Live app:** https://skill-gap-application.onrender.com/
 
-Both tabs use the **Gemini API (free tier)** to extract skills and generate
-judgments. Resume can be uploaded as **.pdf, .docx, or .txt**; the JD is
-pasted as plain text.
+> Heads up: it's on Render's free tier, so if it's been idle a bit the first request can take 30-50s to wake up. Just give it a moment on first load.
 
-## Architecture
+## What it does
 
-- **Backend: Flask** — holds the Gemini API key (server-side only, never
-  sent to the browser), extracts resume text (`pdfplumber` for PDF,
-  `python-docx` for DOCX), builds prompts, and calls Gemini.
-- **Frontend: React (Vite) + Tailwind** — uploads the resume file and JD
-  text to the Flask API and renders the results.
-- **Single deployable service**: Flask serves the built React app as static
-  files, so there's one process and one URL in production.
+**Assignment 1 — Skill Gap Checker**
+Upload a resume, paste a JD, get back matched skills, missing skills, and a match percentage.
+
+**Assignment 2 — Fit Verdict**
+Same inputs, but instead of a skill breakdown you get a verdict (Qualified / Almost There / Not Yet) with 3 supporting reasons.
+
+Both tabs share the same upload + JD input and hit the Gemini API to do the actual skill extraction and reasoning.
+
+## Stack
+
+- **Backend:** Flask — keeps the Gemini API key server-side (never touches the browser), extracts text from resumes (`pdfplumber` for PDF, `python-docx` for DOCX), builds the prompts, calls Gemini.
+- **Frontend:** React (Vite) + Tailwind — handles the upload/JD form and renders results.
+- **Deployment:** one combined service — Flask serves the built React app as static files, so it's a single process and a single URL in production. No CORS juggling, no separate frontend/backend deploys.
 
 ```
 skill-gap-app/
   backend/
-    app.py                  Flask app: API routes + serves built frontend
+    app.py                  routes + serves the built frontend
     requirements.txt
-    .env.example
+    tests/
+      test_analysis_routes.py
     utils/
-      extract_text.py       PDF/DOCX/TXT text extraction
-      gemini_client.py      Gemini API client (key stays server-side)
-      prompts.py            Prompt templates for both assignments
+      extract_text.py       PDF/DOCX/TXT parsing
+      gemini_client.py      Gemini API calls
+      prompts.py            prompt templates
   frontend/
     src/
-      App.jsx                Tabs + shared state + orchestration
-      lib/api.js              Calls the Flask backend
+      App.jsx
+      lib/api.js
       components/
         ResumeUpload.jsx
         JdInput.jsx
         SkillGapResult.jsx
         FitVerdictResult.jsx
-  Procfile                   For Render/Railway (gunicorn)
-  build.sh                   Build script for deployment platforms
+        ParsedSkillsModal.jsx
+  Procfile
+  build.sh
 ```
 
-## Local development
+## Running it locally
 
-**1. Backend**
-
+**Backend**
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
-
-Edit `.env` and add your free Gemini key (from
-https://aistudio.google.com/apikey):
-
+Drop a free Gemini key into `.env` (grab one at https://aistudio.google.com/apikey):
 ```
-GEMINI_API_KEY=your_actual_key_here
+GEMINI_API_KEY=your_key_here
 ```
-
-Run the backend:
-
+Then:
 ```bash
 python app.py
 ```
+Flask runs on `http://localhost:5000`.
 
-This starts Flask on `http://localhost:5000`.
-
-**2. Frontend** (in a separate terminal)
-
+**Frontend** (separate terminal)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Vite runs on `http://localhost:5173` and proxies `/api/*` to Flask, so no CORS setup needed for local dev.
 
-This starts Vite on `http://localhost:5173` and proxies `/api/*` requests to
-Flask automatically (see `vite.config.js`), so there's no CORS friction
-during development.
+## How the match % is calculated
 
-Open `http://localhost:5173` and use the app.
+Wanted this to be auditable, not just "whatever the model says." So it's a hybrid:
+- Gemini extracts skills from both documents and figures out matched vs. missing.
+- **Match percentage is computed in code**, and it only counts **Required** JD skills — `matched Required skills / total Required JD skills * 100`. A matched Preferred skill doesn't inflate the number.
+- Gemini also tags every skill as **Required** or **Preferred** based on how it's phrased in the JD (e.g. "must-have" vs. "nice to have" language). Both Matched and Missing skills are shown split into Required/Preferred groups in the UI (color-coded), so Preferred matches are still visible as context — they just don't count toward the headline percentage.
+- Gemini also adds short notes on adjacent/transferable skills where relevant.
 
-## Deploying (single combined service)
+The Fit Verdict tab is where I let Gemini make the more holistic, judgment-call kind of decision — that one's not meant to be a strict ratio. It's explicitly told to weigh Required gaps more heavily than Preferred gaps when choosing a verdict.
 
-This is set up to deploy as **one service** that builds the frontend and
-serves it from Flask. Works on Render, Railway, or any platform that runs a
-build command + a start command.
+## Assumptions & trade-offs
 
-**General steps (any platform):**
+- Resume parsing assumes text-based PDFs/DOCX/TXT — scanned/image-only PDFs won't extract anything since there's no OCR step. Didn't want to pull in a heavier OCR dependency for a take-home scope.
+- Went with Gemini's free tier, which comes with rate limits (expect an occasional 429 under repeated rapid testing — it's just "wait and retry," not a bug).
+- Single combined deploy (Flask serving the React build) over separate frontend/backend hosting — fewer moving parts, one URL, no CORS config to maintain in production.
+- Match percentage is deterministic by design (see above) — traded a bit of "AI does everything" purity for something explainable in an interview.
 
-1. Push this project to a GitHub repo.
-2. Set the **Build Command** to:
-   ```
-   bash build.sh
-   ```
-3. Set the **Start Command** to:
-   ```
-   gunicorn --chdir backend app:app
-   ```
-4. Add an environment variable: `GEMINI_API_KEY` = your key.
-5. Deploy.
+## Known limitations
 
-**Render specifically:**
-
-1. New → Web Service → connect your repo.
-2. Runtime: Python 3.
-3. Build Command: `bash build.sh`
-4. Start Command: `gunicorn --chdir backend app:app`
-5. Add environment variable `GEMINI_API_KEY` in the Render dashboard.
-6. Deploy — Render will give you a public URL serving both the UI and the
-   API from that same URL.
-
-**Railway specifically:**
-
-1. New Project → Deploy from GitHub repo.
-2. Railway auto-detects Python; set Build Command to `bash build.sh` and
-   Start Command to `gunicorn --chdir backend app:app` in the service
-   settings if it doesn't infer them automatically.
-3. Add `GEMINI_API_KEY` under Variables.
-4. Deploy.
-
-**PythonAnywhere:** PythonAnywhere's free tier doesn't run arbitrary build
-scripts or Node — you'd need to build the frontend locally (`npm run build`
-inside `frontend/`) and commit/upload the resulting `frontend/dist` folder,
-then point a WSGI app at `backend/app.py`. Render or Railway are simpler
-for this project since they run the build script for you.
-
-## How match percentage is calculated
-
-**Hybrid approach:**
-
-- Gemini extracts skills from both documents and determines
-  `matchedSkills` / `missingSkills`.
-- **Match Percentage** is computed deterministically in `backend/app.py` as
-  `len(matchedSkills) / len(jdSkills) * 100` — auditable and reproducible,
-  not left to the model's arithmetic.
-- Gemini separately flags each missing skill as **Critical** or **Nice to
-  have**, and adds optional notes about transferable/adjacent skills. These
-  are shown as context but are **not** folded into the headline percentage.
-
-The Fit Verdict tab (Assignment 2) is where holistic, AI-judged nuance comes
-in instead — that's a judgment call, not a ratio.
-
-## Notes / limitations
-
-- Scanned/image-only PDFs won't extract text (no OCR). Use a text-based PDF
-  or a `.txt` file instead.
-- Gemini free tier has rate limits; a 429 error means "wait and retry."
-- Model used: `gemini-2.5-flash` (change `GEMINI_MODEL` in
-  `backend/utils/gemini_client.py` to swap models). Google's free-tier
-  model lineup changes fairly often — worth checking
-  https://ai.google.dev/gemini-api/docs/pricing before you deploy, in case
-  this needs updating again.
-- `GEMINI_API_KEY` must be set as an environment variable both locally
-  (`.env`) and on your deployment platform's dashboard — it is never
-  committed to the repo (`.env` is gitignored) and never sent to the
-  browser.
+- No OCR for scanned PDFs.
+- Free-tier Gemini rate limits apply.
+- Model in use is `gemini-3.1-flash-lite`, set in `backend/utils/gemini_client.py` — Google's free-tier lineup shifts fairly often, so if this 404s down the line, that's the first place to check against https://ai.google.dev/gemini-api/docs/pricing.
+- There's a basic test suite at `backend/tests/test_analysis_routes.py`.
